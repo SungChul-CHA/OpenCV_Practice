@@ -45,9 +45,6 @@
     <ClCompile Include="example6.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="glui_exampleNOTWORK.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="video_bitwise.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
