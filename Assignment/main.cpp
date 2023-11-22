@@ -11,9 +11,12 @@ VideoCapture cap;
 Mat src, frame;
 int main_window;
 
-int speed = 33;
+double fps;
+int speed;
+int frameCount;
 int isPlay = -1;
-int isButtonPush = -1;
+int isButtonPushF = -1;
+int isButtonPushB = -1;
 
 
 void myGlutIdle(void)
@@ -24,33 +27,69 @@ void myGlutIdle(void)
 	if (glutGetWindow() != main_window)
 		glutSetWindow(main_window);
 
-	while (isPlay == 1) {
-		cap >> frame;
-		if (frame.empty()) {
-			cout << "동영상 종료" << endl;
-			isPlay = -1;
-			break;
+	while (cap.isOpened()) {
+		if (isPlay == 1) {
+			bool isFinish = cap.read(frame);
+			if (!isFinish) {
+				cout << "동영상 종료" << endl;
+				isPlay = -1;
+				break;
+			}
+			imshow("src", frame);
 		}
-
-		imshow("src", frame);
+		else if (isButtonPushB == 1) {
+			speed = (int)(speed / 3);
+			if (cap.get(CAP_PROP_POS_FRAMES) <= 2) cap.set(CAP_PROP_POS_FRAMES, 0);
+			else cap.set(CAP_PROP_POS_FRAMES, cap.get(CAP_PROP_POS_FRAMES) - 2);
+			cap.read(frame);
+			imshow("src", frame);
+		}
+		
+		
 		if (waitKey(speed) > 0) break;
 	}
 }
 
+// 뒤로감기
+void backwardSpeedCallback(int id) {
+	isButtonPushB *= id;
+	isPlay = ~isButtonPushB;
+}
 
+// 뒤로 5초
+void backwardCallback(int id) {
+	int frames = id * fps;
+	if (!cap.read(frame)) cap.set(CAP_PROP_POS_FRAMES, frameCount - frames);
+	else if (cap.get(CAP_PROP_POS_MSEC) < id * 1000) cap.set(CAP_PROP_POS_FRAMES, 0);
+	else cap.set(CAP_PROP_POS_FRAMES, cap.get(CAP_PROP_POS_FRAMES) - frames);
+	cap.read(frame);
+	imshow("src", frame);
+}
+
+// 재생/정지
 void playCallback(int id) {
 	isPlay *= id;
+	isButtonPushB = ~isPlay;
 }
 
+// 5초 앞으로
 void forwardCallback(int id) {
-	for (int i = 0; i < id; i++)
-		cap >> frame;
+	if (!cap.read(frame)) return;
+	else if (((frameCount * 1000 / fps) - cap.get(CAP_PROP_POS_MSEC)) < id * 1000)
+		cap.set(CAP_PROP_POS_FRAMES, frameCount - 1);
+	else {
+		int frames = id * fps;
+		cap.set(CAP_PROP_POS_FRAMES, cap.get(CAP_PROP_POS_FRAMES) + frames);
+	}
+	cap.read(frame);
+	imshow("src", frame);
 }
 
+// 빨리감기
 void forwardSpeedCallback(int id) {
-	isButtonPush *= id;
-	if (isButtonPush == 1) speed = 11;
-	else speed = 33;
+	isButtonPushF *= id;
+	if (isButtonPushF == 1) speed = (int)(speed / 3);
+	else speed = (int)(1000 / fps);
 }
 
 
@@ -62,12 +101,20 @@ void open(int id)
 		case 0: {
 			cap.open(id);
 			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
-			for (int i = 0; i < 5; i++) cap >> frame;
+			for (int i = 0; i < 10; i++) cap >> frame;
 			isPlay = -1;
 			imshow("src", frame);
 			break;
 		}
 		case 1: {
+			cap.open(id);
+			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
+			for (int i = 0; i < 5; i++) cap >> frame;
+			isPlay = -1;
+			imshow("src", frame);
+			break;
+		}
+		case 2: {
 			OpenFileDialog* openFileDialog = new OpenFileDialog();
 			openFileDialog->Filter = "Image Files(*.BMP;*.JPG;*.GIF)|*.BMP;*.JPG;*.GIF|All files (*.*)|*.*";
 			if (openFileDialog->ShowDialog()) {
@@ -76,6 +123,7 @@ void open(int id)
 				isPlay = -1;
 				imshow("image", src);
 			}
+			else exit;
 			break;
 		}
 	default: {
@@ -86,8 +134,12 @@ void open(int id)
 			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
 			cap >> frame;
 			isPlay = -1;
+			fps = cap.get(CAP_PROP_FPS);
+			speed = (int)(1000 / fps);
+			frameCount = cap.get(CAP_PROP_FRAME_COUNT);
 			imshow("src", frame);
 		}
+		else exit;
 		break;
 	}
 	}
@@ -102,10 +154,6 @@ void save(int id)
 		imwrite(Filename, src);
 	}
 }
-
-
-
-int check = 1;
 
 
 int main(int argc, char* argv[]) {
@@ -126,20 +174,21 @@ int main(int argc, char* argv[]) {
 	glui->add_column_to_panel(videoPanel, TRUE);
 
 	glui->add_button_to_panel(videoPanel, "Use Camera", 0, open);
+	glui->add_button_to_panel(videoPanel, "Use Smartphone", 1, open);
 
 	// control panel
 	GLUI_Panel* controlPanel = glui->add_panel("Control panel", GLUI_PANEL_NONE);
 	glui->add_statictext_to_panel(controlPanel, "backward fast play");
-	glui->add_button_to_panel(controlPanel, "<<", 0);
+	glui->add_button_to_panel(controlPanel, "<<", -1, backwardSpeedCallback);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "  backward play");
-	glui->add_button_to_panel(controlPanel, "<", 0);
+	glui->add_button_to_panel(controlPanel, "<", 5, backwardCallback);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "     pause/play");
 	glui->add_button_to_panel(controlPanel, "||", -1, playCallback);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "   forward play");
-	glui->add_button_to_panel(controlPanel, ">", 151, forwardCallback);
+	glui->add_button_to_panel(controlPanel, ">", 5, forwardCallback);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "forward fast play");
 	glui->add_button_to_panel(controlPanel, ">>", -1, forwardSpeedCallback);
@@ -147,7 +196,7 @@ int main(int argc, char* argv[]) {
 	glui->add_column(TRUE);
 
 	GLUI_Panel* picturePanel = glui->add_panel("Picture panel", GLUI_PANEL_EMBOSSED);
-	glui->add_button_to_panel(picturePanel, "Open source", 1, open);
+	glui->add_button_to_panel(picturePanel, "Open source", 2, open);
 
 
 	glui->set_main_gfx_window(main_window);
