@@ -1,7 +1,4 @@
-#pragma warning(disable:4996)
-
-
-#include <opencv2/opencv.hpp>
+ï»¿#include <opencv2/opencv.hpp>
 #include <GL/glui.h>
 #include "OpenFileDialog.h"
 #include "SaveFileDialog.h"
@@ -14,40 +11,85 @@ VideoCapture cap;
 Mat src, frame;
 int main_window;
 
+int speed = 33;
+int isPlay = -1;
+int isButtonPush = -1;
 
-std::string TCHARToString(const TCHAR* ptsz)
+
+void myGlutIdle(void)
 {
-	int len = wcslen((wchar_t*)ptsz);
-	char* psz = new char[2 * len + 1];
-	wcstombs(psz, (wchar_t*)ptsz, 2 * len + 1);
-	std::string s = psz;
-	delete[] psz;
-	return s;
-}
+	/* According to the GLUT specification, the current window is
+	   undefined during an idle callback.  So we need to explicitly change
+	   it if necessary */
+	if (glutGetWindow() != main_window)
+		glutSetWindow(main_window);
 
-void playVideo(VideoCapture cap) {
-	while (1) {
+	while (isPlay == 1) {
 		cap >> frame;
 		if (frame.empty()) {
-			cout << "µ¿¿µ»ó Á¾·á" << endl;
+			cout << "ë™ì˜ìƒ ì¢…ë£Œ" << endl;
+			isPlay = -1;
 			break;
 		}
 
-		imshow("Video", frame);
-		if (waitKey(33) >= 0) break;
+		imshow("src", frame);
+		if (waitKey(speed) > 0) break;
 	}
+}
+
+
+void playCallback(int id) {
+	isPlay *= id;
+}
+
+void forwardCallback(int id) {
+	for (int i = 0; i < id; i++)
+		cap >> frame;
+}
+
+void forwardSpeedCallback(int id) {
+	isButtonPush *= id;
+	if (isButtonPush == 1) speed = 11;
+	else speed = 33;
 }
 
 
 // FileOpen
 void open(int id)
 {
-	OpenFileDialog* openFileDialog = new OpenFileDialog();
-	if (openFileDialog->ShowDialog()) {
-		Filename = TCHARToString(openFileDialog->FileName);
-		cap.open(Filename);	// µ¿¿µ»ó ÆÄÀÏÀÎ °æ¿ì
-		if (!cap.isOpened()) { cout << "µ¿¿µ»óÀ» ¿­ ¼ö ¾øÀ½\n"; exit; }
-		playVideo(cap);
+	switch (id)
+	{
+		case 0: {
+			cap.open(id);
+			if (!cap.isOpened()) { cout << "ë™ì˜ìƒì„ ì—´ ìˆ˜ ì—†ìŒ\n"; exit; }
+			for (int i = 0; i < 5; i++) cap >> frame;
+			isPlay = -1;
+			imshow("src", frame);
+			break;
+		}
+		case 1: {
+			OpenFileDialog* openFileDialog = new OpenFileDialog();
+			openFileDialog->Filter = "Image Files(*.BMP;*.JPG;*.GIF)|*.BMP;*.JPG;*.GIF|All files (*.*)|*.*";
+			if (openFileDialog->ShowDialog()) {
+				Filename = openFileDialog->FileName;
+				src = imread(Filename);
+				isPlay = -1;
+				imshow("image", src);
+			}
+			break;
+		}
+	default: {
+		OpenFileDialog* openVideoDialog = new OpenFileDialog();
+		if (openVideoDialog->ShowDialog()) {
+			Filename = openVideoDialog->FileName;
+			cap.open(Filename);	// ë™ì˜ìƒ íŒŒì¼ì¸ ê²½ìš°
+			if (!cap.isOpened()) { cout << "ë™ì˜ìƒì„ ì—´ ìˆ˜ ì—†ìŒ\n"; exit; }
+			cap >> frame;
+			isPlay = -1;
+			imshow("src", frame);
+		}
+		break;
+	}
 	}
 }
 
@@ -56,10 +98,12 @@ void save(int id)
 {
 	SaveFileDialog* openFileDialog = new SaveFileDialog();
 	if (openFileDialog->ShowDialog()) {
-		Filename = TCHARToString(openFileDialog->FileName);
+		Filename = openFileDialog->FileName;
 		imwrite(Filename, src);
 	}
 }
+
+
 
 int check = 1;
 
@@ -71,16 +115,17 @@ int main(int argc, char* argv[]) {
 	GLUI* glui = GLUI_Master.create_glui("Menu", 0);
 	main_window = glui->get_glut_window_id();
 
-
-
-
-	GLUI_Panel* buttonPanel = glui->add_panel("Button panel", GLUI_PANEL_RAISED);
-	GLUI_Rollout* buttonRollout = glui->add_rollout_to_panel(buttonPanel, "CLICK HERE !!!", FALSE);
+	
+	GLUI_Panel* videoPanel = glui->add_panel("Video panel", GLUI_PANEL_RAISED);
+	GLUI_Rollout* buttonRollout = glui->add_rollout_to_panel(videoPanel, "CLICK HERE", FALSE);
 	glui->add_button_to_panel(buttonRollout, "Open Video", -1, open);
 	glui->add_button_to_panel(buttonRollout, "Save Video", -1, save);
 	glui->add_separator_to_panel(buttonRollout);
 	glui->add_button_to_panel(buttonRollout, "Exit", 0, exit);
 
+	glui->add_column_to_panel(videoPanel, TRUE);
+
+	glui->add_button_to_panel(videoPanel, "Use Camera", 0, open);
 
 	// control panel
 	GLUI_Panel* controlPanel = glui->add_panel("Control panel", GLUI_PANEL_NONE);
@@ -91,19 +136,24 @@ int main(int argc, char* argv[]) {
 	glui->add_button_to_panel(controlPanel, "<", 0);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "     pause/play");
-	glui->add_button_to_panel(controlPanel, "||", 0);
+	glui->add_button_to_panel(controlPanel, "||", -1, playCallback);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "   forward play");
-	glui->add_button_to_panel(controlPanel, ">", 0);
+	glui->add_button_to_panel(controlPanel, ">", 151, forwardCallback);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "forward fast play");
-	glui->add_button_to_panel(controlPanel, ">>", 0);
+	glui->add_button_to_panel(controlPanel, ">>", -1, forwardSpeedCallback);
 
+	glui->add_column(TRUE);
 
-
+	GLUI_Panel* picturePanel = glui->add_panel("Picture panel", GLUI_PANEL_EMBOSSED);
+	glui->add_button_to_panel(picturePanel, "Open source", 1, open);
 
 
 	glui->set_main_gfx_window(main_window);
+
+	GLUI_Master.set_glutIdleFunc(myGlutIdle);
+
 	glutMainLoop();
 	return EXIT_SUCCESS;
 }
