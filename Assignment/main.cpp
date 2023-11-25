@@ -38,14 +38,14 @@ void myGlutIdle(void)
 			imshow("src", frame);
 		}
 		else if (isButtonPushB == 1) {
-			speed = (int)(speed / 3);
-			if (cap.get(CAP_PROP_POS_FRAMES) <= 2) cap.set(CAP_PROP_POS_FRAMES, 0);
-			else cap.set(CAP_PROP_POS_FRAMES, cap.get(CAP_PROP_POS_FRAMES) - 2);
+			int currentFrame = cap.get(CAP_PROP_POS_FRAMES);
+
+			if (currentFrame <= 2) cap.set(CAP_PROP_POS_FRAMES, 0);
+			else cap.set(CAP_PROP_POS_FRAMES, currentFrame - 2);
+
 			cap.read(frame);
 			imshow("src", frame);
 		}
-		
-		
 		if (waitKey(speed) > 0) break;
 	}
 }
@@ -53,8 +53,12 @@ void myGlutIdle(void)
 // 뒤로감기
 void backwardSpeedCallback(int id) {
 	isButtonPushB *= id;
-	isPlay = ~isButtonPushB;
+	isPlay *= id;
+
+	if (isButtonPushB == 1) speed = (int)(speed / 4);
+	else speed = (int)(1000 / fps);
 }
+
 
 // 뒤로 5초
 void backwardCallback(int id) {
@@ -68,8 +72,11 @@ void backwardCallback(int id) {
 
 // 재생/정지
 void playCallback(int id) {
-	isPlay *= id;
-	isButtonPushB = ~isPlay;
+	if (isButtonPushB == 1) {
+		isPlay = -1; isButtonPushB = -1;
+	}
+	else isPlay *= id;
+	speed = (int)(1000 / fps);
 }
 
 // 5초 앞으로
