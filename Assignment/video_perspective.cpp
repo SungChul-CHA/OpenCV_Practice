@@ -5,8 +5,8 @@ using namespace std;
 int cx, cy;
 int index = 0;
 Point2f inputp[4], outputp[4];
-Mat h, out, buf;
-Mat buf1, buf2, buf3;
+Mat transform_matrix, PT_out, or_mask;
+Mat src_origin, frame_for_init, frame_for_trans;
 Mat src;
 
 // 마우스 이벤트가 발생하면 호출되는 콜백 함수이다. 
@@ -46,12 +46,12 @@ void setPos(int event, int x, int y, int flags, void* param)
 			for (int i = 0; i < 4; ++i) {
 				points.push_back(Point(outputp[i].x, outputp[i].y));
 			}
-			buf = Mat::zeros(frame.rows, frame.cols, frame.depth());
-			fillPoly(buf, points, Scalar::all(255));
-			h = getPerspectiveTransform(inputp, outputp);
-			warpPerspective(buf1, out, h, frame.size());
-			out.copyTo(buf3, buf);
-			imshow("video", buf3);
+			or_mask = Mat::zeros(frame.rows, frame.cols, frame.depth());
+			fillPoly(or_mask, points, Scalar::all(255));
+			transform_matrix = getPerspectiveTransform(inputp, outputp);
+			warpPerspective(src_origin, PT_out, transform_matrix, frame.size());
+			PT_out.copyTo(frame_for_trans, or_mask);
+			imshow("video", frame_for_trans);
 		}
 	}
 }
@@ -60,13 +60,13 @@ int main()
 {
 
 	//VideoCapture cap(0);	// 웹캠
-	VideoCapture cap("src/BigBuckBunny.mp4");	// 동영상
+	VideoCapture cap("src/timesquare.mp4");	// 동영상
 	if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; return -1; }
 	Mat frame;
 	for (int i = 0; i < 5; i++)
 		cap >> frame;
 	src = imread("src/yoon2.jpg");
-	buf1 = src.clone();
+	src_origin = src.clone();
 	imshow("image", src);
 
 	setMouseCallback("image", extract, &src);
@@ -75,13 +75,13 @@ int main()
 		if (waitKey() == 'c') break;
 		else {
 			index = 0;
-			buf1.copyTo(src);
+			src_origin.copyTo(src);
 			imshow("image", src);
 		}
 	}
 
-	buf2 = frame.clone();
-	buf3 = frame.clone();
+	frame_for_init = frame.clone();
+	frame_for_trans = frame.clone();
 	index = 0;
 	imshow("video", frame);
 
@@ -95,7 +95,7 @@ int main()
 		}
 		else {
 			index = 0;
-			buf2.copyTo(frame);
+			frame_for_init.copyTo(frame);
 			imshow("video", frame);
 		}
 	}
@@ -111,7 +111,7 @@ int main()
 			break;
 		}
 
-		out.copyTo(frame, buf);
+		PT_out.copyTo(frame, or_mask);
 		imshow("video", frame);
 		waitKey(speed);
 	}
