@@ -5,9 +5,8 @@ using namespace std;
 int cx, cy;
 int index = 0;
 Point2f inputp[4], outputp[4];
-Mat transform_matrix, PT_out, or_mask;
-Mat src_origin, frame_for_init, frame_for_trans;
-Mat src;
+Mat PT_out, or_mask;
+Mat src_origin, frame_for_trans;
 
 // 마우스 이벤트가 발생하면 호출되는 콜백 함수이다. 
 void extract(int event, int x, int y, int flags, void* param)
@@ -48,7 +47,7 @@ void setPos(int event, int x, int y, int flags, void* param)
 			}
 			or_mask = Mat::zeros(frame.rows, frame.cols, frame.depth());
 			fillPoly(or_mask, points, Scalar::all(255));
-			transform_matrix = getPerspectiveTransform(inputp, outputp);
+			Mat transform_matrix = getPerspectiveTransform(inputp, outputp);
 			warpPerspective(src_origin, PT_out, transform_matrix, frame.size());
 			PT_out.copyTo(frame_for_trans, or_mask);
 			imshow("video", frame_for_trans);
@@ -65,7 +64,7 @@ int main()
 	Mat frame;
 	for (int i = 0; i < 5; i++)
 		cap >> frame;
-	src = imread("src/yoon2.jpg");
+	Mat src = imread("src/choi.png");
 	src_origin = src.clone();
 	imshow("image", src);
 
@@ -80,7 +79,7 @@ int main()
 		}
 	}
 
-	frame_for_init = frame.clone();
+	Mat frame_for_init = frame.clone();
 	frame_for_trans = frame.clone();
 	index = 0;
 	imshow("video", frame);

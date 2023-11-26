@@ -8,8 +8,16 @@ using namespace std;
 
 String Filename;
 VideoCapture cap;
-Mat src, frame;
+Mat pic, frame;
 int main_window;
+
+
+int cx, cy;
+int index = 0;
+Point2f inputp[4], outputp[4];
+Mat PT_out, or_mask;
+Mat src_origin, frame_for_trans;
+
 
 double fps;
 int speed;
@@ -19,11 +27,58 @@ int isButtonPushF = -1;
 int isButtonPushB = -1;
 
 
+// 마우스 이벤트가 발생하면 호출되는 콜백 함수이다. 
+void extract(int event, int x, int y, int flags, void* param)
+{
+	Mat& psrc = *(Mat*)param;
+	if ((index < 4) & (event == EVENT_LBUTTONDOWN)) {
+		cx = x;
+		cy = y;
+		inputp[index] = Point2f(cx, cy);
+		circle(psrc, inputp[index], 5, Scalar(100, 255, 51), -1);
+		imshow("image", psrc);
+		index++;
+		if (index == 4) {
+			vector<Point> points;
+			for (int i = 0; i < 4; ++i) {
+				points.push_back(Point(inputp[i].x, inputp[i].y));
+			}
+			polylines(psrc, points, true, Scalar(100, 255, 51), 3);
+			imshow("image", psrc);
+		}
+	}
+}
+
+void setPos(int event, int x, int y, int flags, void* param)
+{
+	Mat& pframe = *(Mat*)param;
+	if ((index < 4) & (event == EVENT_LBUTTONDOWN)) {
+		cx = x;
+		cy = y;
+		outputp[index] = Point2f(cx, cy);
+		circle(pframe, outputp[index], 7, Scalar(100, 255, 51), 3);
+		imshow("video", pframe);
+		index++;
+		if (index == 4) {
+			vector<Point> points;
+			for (int i = 0; i < 4; ++i) {
+				points.push_back(Point(outputp[i].x, outputp[i].y));
+			}
+			or_mask = Mat::zeros(pframe.rows, pframe.cols, pframe.depth());
+			fillPoly(or_mask, points, Scalar::all(255));
+			Mat transform_matrix = getPerspectiveTransform(inputp, outputp);
+			warpPerspective(src_origin, PT_out, transform_matrix, pframe.size());
+			PT_out.copyTo(frame_for_trans, or_mask);
+			imshow("video", frame_for_trans);
+		}
+	}
+}
+
+
+
+
 void myGlutIdle(void)
 {
-	/* According to the GLUT specification, the current window is
-	   undefined during an idle callback.  So we need to explicitly change
-	   it if necessary */
 	if (glutGetWindow() != main_window)
 		glutSetWindow(main_window);
 
@@ -35,7 +90,7 @@ void myGlutIdle(void)
 				isPlay = -1;
 				break;
 			}
-			imshow("src", frame);
+			imshow("video", frame);
 		}
 		else if (isButtonPushB == 1) {
 			int currentFrame = cap.get(CAP_PROP_POS_FRAMES);
@@ -44,7 +99,7 @@ void myGlutIdle(void)
 			else cap.set(CAP_PROP_POS_FRAMES, currentFrame - 2);
 
 			cap.read(frame);
-			imshow("src", frame);
+			imshow("video", frame);
 		}
 		if (waitKey(speed) > 0) break;
 	}
@@ -67,7 +122,7 @@ void backwardCallback(int id) {
 	else if (cap.get(CAP_PROP_POS_MSEC) < id * 1000) cap.set(CAP_PROP_POS_FRAMES, 0);
 	else cap.set(CAP_PROP_POS_FRAMES, cap.get(CAP_PROP_POS_FRAMES) - frames);
 	cap.read(frame);
-	imshow("src", frame);
+	imshow("video", frame);
 }
 
 // 재생/정지
@@ -89,7 +144,7 @@ void forwardCallback(int id) {
 		cap.set(CAP_PROP_POS_FRAMES, cap.get(CAP_PROP_POS_FRAMES) + frames);
 	}
 	cap.read(frame);
-	imshow("src", frame);
+	imshow("video", frame);
 }
 
 // 빨리감기
@@ -110,7 +165,7 @@ void open(int id)
 			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
 			for (int i = 0; i < 10; i++) cap >> frame;
 			isPlay = -1;
-			imshow("src", frame);
+			imshow("video", frame);
 			break;
 		}
 		case 1: {
@@ -118,7 +173,7 @@ void open(int id)
 			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
 			for (int i = 0; i < 5; i++) cap >> frame;
 			isPlay = -1;
-			imshow("src", frame);
+			imshow("video", frame);
 			break;
 		}
 		case 2: {
@@ -126,9 +181,9 @@ void open(int id)
 			openFileDialog->Filter = "Image Files(*.BMP;*.JPG;*.GIF)|*.BMP;*.JPG;*.GIF|All files (*.*)|*.*";
 			if (openFileDialog->ShowDialog()) {
 				Filename = openFileDialog->FileName;
-				src = imread(Filename);
+				pic = imread(Filename);
 				isPlay = -1;
-				imshow("image", src);
+				imshow("image", pic);
 			}
 			else exit;
 			break;
@@ -144,7 +199,7 @@ void open(int id)
 			fps = cap.get(CAP_PROP_FPS);
 			speed = (int)(1000 / fps);
 			frameCount = cap.get(CAP_PROP_FRAME_COUNT);
-			imshow("src", frame);
+			imshow("video", frame);
 		}
 		else exit;
 		break;
@@ -158,7 +213,7 @@ void save(int id)
 	SaveFileDialog* openFileDialog = new SaveFileDialog();
 	if (openFileDialog->ShowDialog()) {
 		Filename = openFileDialog->FileName;
-		imwrite(Filename, src);
+		imwrite(Filename, pic);
 	}
 }
 
