@@ -13,32 +13,60 @@ int main_window;
 
 
 int cx, cy;
-int index = 0;
+int index_p, index_v = 0;
 Point2f inputp[4], outputp[4];
 Mat PT_out, or_mask;
-Mat src_origin, frame_for_trans;
+Mat src_origin, frame_for_trans, frame_for_init;
 
 
-double fps;
+GLUI_Button* button_forward = NULL;
+GLUI_Button* button_forwardS = NULL;
+
+double fps = 100;
 int speed;
 int frameCount;
 int isPlay = -1;
 int isButtonPushF = -1;
 int isButtonPushB = -1;
+int isEdit = 0;
+int isCam = 0;
+int isSave = 0;
 
+
+void clear(int id) {
+	if (id == 1) {
+		index_p = 0;
+		src_origin.copyTo(pic);
+		imshow("image", pic);
+	}
+	else if (id == 2) {
+		index_v = 0;
+		frame_for_init.copyTo(frame);
+		imshow("video", frame);
+	}
+}
+
+void capture(int id) {
+	isEdit = 1;
+	isPlay = 1;
+}
+
+void savebutton(int id) {
+	isSave = 1;
+}
 
 // 마우스 이벤트가 발생하면 호출되는 콜백 함수이다. 
 void extract(int event, int x, int y, int flags, void* param)
 {
 	Mat& psrc = *(Mat*)param;
-	if ((index < 4) & (event == EVENT_LBUTTONDOWN)) {
+	if ((index_p < 4) & (event == EVENT_LBUTTONDOWN)) {
 		cx = x;
 		cy = y;
-		inputp[index] = Point2f(cx, cy);
-		circle(psrc, inputp[index], 5, Scalar(100, 255, 51), -1);
+		inputp[index_p] = Point2f(cx, cy);
+		circle(psrc, inputp[index_p], 5, Scalar(100, 255, 51), -1);
 		imshow("image", psrc);
-		index++;
-		if (index == 4) {
+		index_p++;
+		if (index_p == 4) {
 			vector<Point> points;
 			for (int i = 0; i < 4; ++i) {
 				points.push_back(Point(inputp[i].x, inputp[i].y));
@@ -51,15 +79,17 @@ void extract(int event, int x, int y, int flags, void* param)
 
 void setPos(int event, int x, int y, int flags, void* param)
 {
+	
 	Mat& pframe = *(Mat*)param;
-	if ((index < 4) & (event == EVENT_LBUTTONDOWN)) {
+	if ((index_v < 4) & (event == EVENT_LBUTTONDOWN)) {
+		isPlay = -1;
 		cx = x;
 		cy = y;
-		outputp[index] = Point2f(cx, cy);
-		circle(pframe, outputp[index], 7, Scalar(100, 255, 51), 3);
+		outputp[index_v] = Point2f(cx, cy);
+		circle(pframe, outputp[index_v], 5, Scalar(100, 255, 51), -1);
 		imshow("video", pframe);
-		index++;
-		if (index == 4) {
+		index_v++;
+		if (index_v == 4) {
 			vector<Point> points;
 			for (int i = 0; i < 4; ++i) {
 				points.push_back(Point(outputp[i].x, outputp[i].y));
@@ -75,8 +105,6 @@ void setPos(int event, int x, int y, int flags, void* param)
 }
 
 
-
-
 void myGlutIdle(void)
 {
 	if (glutGetWindow() != main_window)
@@ -85,12 +113,18 @@ void myGlutIdle(void)
 	while (cap.isOpened()) {
 		if (isPlay == 1) {
 			bool isFinish = cap.read(frame);
+			frame_for_init = frame.clone();
+			frame_for_trans = frame.clone();
 			if (!isFinish) {
 				cout << "동영상 종료" << endl;
 				isPlay = -1;
 				break;
 			}
-			imshow("video", frame);
+			if (isEdit == 1) {
+				PT_out.copyTo(frame, or_mask);
+				imshow("video", frame);
+			}
+			else imshow("video", frame);
 		}
 		else if (isButtonPushB == 1) {
 			int currentFrame = cap.get(CAP_PROP_POS_FRAMES);
@@ -131,7 +165,7 @@ void playCallback(int id) {
 		isPlay = -1; isButtonPushB = -1;
 	}
 	else isPlay *= id;
-	speed = (int)(1000 / fps);
+	if (isCam != 1) speed = (int)(1000 / fps);
 }
 
 // 5초 앞으로
@@ -165,7 +199,14 @@ void open(int id)
 			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
 			for (int i = 0; i < 10; i++) cap >> frame;
 			isPlay = -1;
+			isEdit = 0;
+			isCam = 1;
+			speed = 10;
+			button_forward->disable();
+			button_forwardS->disable();
 			imshow("video", frame);
+			index_v = 0;
+			setMouseCallback("video", setPos, &frame);
 			break;
 		}
 		case 1: {
@@ -173,7 +214,14 @@ void open(int id)
 			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
 			for (int i = 0; i < 5; i++) cap >> frame;
 			isPlay = -1;
+			isEdit = 0;
+			isCam = 1;
+			speed = 10;
+			button_forward->disable();
+			button_forwardS->disable();
 			imshow("video", frame);
+			index_v = 0;
+			setMouseCallback("video", setPos, &frame);
 			break;
 		}
 		case 2: {
@@ -182,8 +230,11 @@ void open(int id)
 			if (openFileDialog->ShowDialog()) {
 				Filename = openFileDialog->FileName;
 				pic = imread(Filename);
+				src_origin = pic.clone();
 				isPlay = -1;
 				imshow("image", pic);
+				index_p = 0;
+				setMouseCallback("image", extract, &pic);
 			}
 			else exit;
 			break;
@@ -196,10 +247,13 @@ void open(int id)
 			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
 			cap >> frame;
 			isPlay = -1;
+			isEdit = 0;
 			fps = cap.get(CAP_PROP_FPS);
 			speed = (int)(1000 / fps);
 			frameCount = cap.get(CAP_PROP_FRAME_COUNT);
 			imshow("video", frame);
+			index_v = 0;
+			setMouseCallback("video", setPos, &frame);
 		}
 		else exit;
 		break;
@@ -213,7 +267,30 @@ void save(int id)
 	SaveFileDialog* openFileDialog = new SaveFileDialog();
 	if (openFileDialog->ShowDialog()) {
 		Filename = openFileDialog->FileName;
-		imwrite(Filename, pic);
+
+		VideoWriter videoWriter(Filename, VideoWriter::fourcc('D', 'I', 'V', 'X'), fps, frame.size());
+		if (!videoWriter.isOpened()) {
+			cout << "Error opening video file for writing" << endl;
+			return;
+		}
+		if (isCam == 0) {
+			cap.set(CAP_PROP_POS_FRAMES, 0);
+			for (int i = 0; i < frameCount; ++i) {
+				cap.read(frame);
+				if (isEdit == 1) PT_out.copyTo(frame, or_mask);
+				videoWriter.write(frame);
+			}
+		}
+		while (isCam == 1) {
+			cap.read(frame);
+			if (isEdit == 1) PT_out.copyTo(frame, or_mask);
+			videoWriter.write(frame);
+			imshow("video", frame);
+			if (isSave == 1) break;
+			if (waitKey(speed) > 0) break;
+		}
+		
+		videoWriter.release();
 	}
 }
 
@@ -230,6 +307,7 @@ int main(int argc, char* argv[]) {
 	GLUI_Rollout* buttonRollout = glui->add_rollout_to_panel(videoPanel, "CLICK HERE", FALSE);
 	glui->add_button_to_panel(buttonRollout, "Open Video", -1, open);
 	glui->add_button_to_panel(buttonRollout, "Save Video", -1, save);
+	glui->add_button_to_panel(buttonRollout, "Save Cam", -1, savebutton);
 	glui->add_separator_to_panel(buttonRollout);
 	glui->add_button_to_panel(buttonRollout, "Exit", 0, exit);
 
@@ -238,28 +316,39 @@ int main(int argc, char* argv[]) {
 	glui->add_button_to_panel(videoPanel, "Use Camera", 0, open);
 	glui->add_button_to_panel(videoPanel, "Use Smartphone", 1, open);
 
+	int buttonSize = 60;
 	// control panel
 	GLUI_Panel* controlPanel = glui->add_panel("Control panel", GLUI_PANEL_NONE);
 	glui->add_statictext_to_panel(controlPanel, "backward fast play");
-	glui->add_button_to_panel(controlPanel, "<<", -1, backwardSpeedCallback);
+	GLUI_Button* button_backS = glui->add_button_to_panel(controlPanel, "<<", -1, backwardSpeedCallback);
+	button_backS->set_w(buttonSize);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "  backward play");
-	glui->add_button_to_panel(controlPanel, "<", 5, backwardCallback);
+	GLUI_Button* button_back = glui->add_button_to_panel(controlPanel, "<", 5, backwardCallback);
+	button_back->set_w(buttonSize);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "     pause/play");
-	glui->add_button_to_panel(controlPanel, "||", -1, playCallback);
+	GLUI_Button* button_pause = glui->add_button_to_panel(controlPanel, "||", -1, playCallback);
+	button_pause->set_w(buttonSize);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "   forward play");
-	glui->add_button_to_panel(controlPanel, ">", 5, forwardCallback);
+	button_forward = glui->add_button_to_panel(controlPanel, ">", 5, forwardCallback);
+	button_forward->set_w(buttonSize);
 	glui->add_column_to_panel(controlPanel, FALSE);
 	glui->add_statictext_to_panel(controlPanel, "forward fast play");
-	glui->add_button_to_panel(controlPanel, ">>", -1, forwardSpeedCallback);
+	button_forwardS = glui->add_button_to_panel(controlPanel, ">>", -1, forwardSpeedCallback);
+	button_forwardS->set_w(buttonSize);
 
 	glui->add_column(TRUE);
 
 	GLUI_Panel* picturePanel = glui->add_panel("Picture panel", GLUI_PANEL_EMBOSSED);
 	glui->add_button_to_panel(picturePanel, "Open source", 2, open);
 
+	glui->add_button_to_panel(picturePanel, "Clear Source", 1, clear);
+	glui->add_button_to_panel(picturePanel, "Clear Video", 2, clear);
+	glui->add_button_to_panel(picturePanel, "Edit Video!", -1, capture);
+
+	
 
 	glui->set_main_gfx_window(main_window);
 
