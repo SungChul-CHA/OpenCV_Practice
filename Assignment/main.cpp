@@ -33,13 +33,23 @@ int isCam = 0;
 int isSave = 0;
 
 
+int bb = 0;
+
 void clear(int id) {
 	if (id == 1) {
+		if (pic.empty()) {
+			cout << "Source Image has not opend yet!" << endl;
+			return;
+		}
 		index_p = 0;
 		src_origin.copyTo(pic);
 		imshow("image", pic);
 	}
 	else if (id == 2) {
+		if (!cap.isOpened()) {
+			cout << "Video has not opend yet!" << endl;
+			return;
+		}
 		index_v = 0;
 		frame_for_init.copyTo(frame);
 		imshow("video", frame);
@@ -47,11 +57,19 @@ void clear(int id) {
 }
 
 void capture(int id) {
+	if (PT_out.empty() | or_mask.empty()) {
+		cout << "You need to select more areas for combine" << endl;
+		return;
+	}
 	isEdit = 1;
 	isPlay = 1;
 }
 
 void savebutton(int id) {
+	if (!cap.isOpened()) {
+		cout << "Cam has not opend yet!" << endl;
+		return;
+	}
 	isSave = 1;
 }
 
@@ -82,6 +100,9 @@ void setPos(int event, int x, int y, int flags, void* param)
 	
 	Mat& pframe = *(Mat*)param;
 	if ((index_v < 4) & (event == EVENT_LBUTTONDOWN)) {
+		if (pic.empty()) {
+			cout << "Open source image first!" << endl; return;
+		}
 		isPlay = -1;
 		cx = x;
 		cy = y;
@@ -97,6 +118,7 @@ void setPos(int event, int x, int y, int flags, void* param)
 			or_mask = Mat::zeros(pframe.rows, pframe.cols, pframe.depth());
 			fillPoly(or_mask, points, Scalar::all(255));
 			Mat transform_matrix = getPerspectiveTransform(inputp, outputp);
+			if (index_p != 4) { cout << "Please click source image first" << endl; return; }
 			warpPerspective(src_origin, PT_out, transform_matrix, pframe.size());
 			PT_out.copyTo(frame_for_trans, or_mask);
 			imshow("video", frame_for_trans);
@@ -111,6 +133,15 @@ void myGlutIdle(void)
 		glutSetWindow(main_window);
 
 	while (cap.isOpened()) {
+		if (bb != 0) {
+			int currentFrame = cap.get(CAP_PROP_POS_FRAMES);
+
+			if (currentFrame <= 11) cap.set(CAP_PROP_POS_FRAMES, 0);
+			else cap.set(CAP_PROP_POS_FRAMES, currentFrame + bb * 11);
+
+			cap.read(frame);
+			imshow("video", frame);
+		}
 		if (isPlay == 1) {
 			bool isFinish = cap.read(frame);
 			frame_for_init = frame.clone();
@@ -135,6 +166,7 @@ void myGlutIdle(void)
 			cap.read(frame);
 			imshow("video", frame);
 		}
+		
 		if (waitKey(speed) > 0) break;
 	}
 }
@@ -151,6 +183,7 @@ void backwardSpeedCallback(int id) {
 
 // 뒤로 5초
 void backwardCallback(int id) {
+	if (!cap.isOpened()) return;
 	int frames = id * fps;
 	if (!cap.read(frame)) cap.set(CAP_PROP_POS_FRAMES, frameCount - frames);
 	else if (cap.get(CAP_PROP_POS_MSEC) < id * 1000) cap.set(CAP_PROP_POS_FRAMES, 0);
@@ -165,6 +198,7 @@ void playCallback(int id) {
 		isPlay = -1; isButtonPushB = -1;
 	}
 	else isPlay *= id;
+	
 	if (isCam != 1) speed = (int)(1000 / fps);
 }
 
@@ -196,7 +230,7 @@ void open(int id)
 	{
 		case 0: {
 			cap.open(id);
-			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
+			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; return; }
 			for (int i = 0; i < 10; i++) cap >> frame;
 			isPlay = -1;
 			isEdit = 0;
@@ -211,7 +245,7 @@ void open(int id)
 		}
 		case 1: {
 			cap.open(id);
-			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
+			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; return; }
 			for (int i = 0; i < 5; i++) cap >> frame;
 			isPlay = -1;
 			isEdit = 0;
@@ -230,6 +264,10 @@ void open(int id)
 			if (openFileDialog->ShowDialog()) {
 				Filename = openFileDialog->FileName;
 				pic = imread(Filename);
+				if (pic.empty()) {
+					cout << "please select an image" << endl;
+					return;
+				}
 				src_origin = pic.clone();
 				isPlay = -1;
 				imshow("image", pic);
@@ -244,7 +282,7 @@ void open(int id)
 		if (openVideoDialog->ShowDialog()) {
 			Filename = openVideoDialog->FileName;
 			cap.open(Filename);	// 동영상 파일인 경우
-			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; exit; }
+			if (!cap.isOpened()) { cout << "동영상을 열 수 없음\n"; return; }
 			cap >> frame;
 			isPlay = -1;
 			isEdit = 0;
@@ -252,6 +290,8 @@ void open(int id)
 			speed = (int)(1000 / fps);
 			frameCount = cap.get(CAP_PROP_FRAME_COUNT);
 			imshow("video", frame);
+			frame_for_init = frame.clone();
+			frame_for_trans = frame.clone();
 			index_v = 0;
 			setMouseCallback("video", setPos, &frame);
 		}
@@ -264,6 +304,10 @@ void open(int id)
 //FileSave
 void save(int id)
 {
+	if (!cap.isOpened()) {
+		cout << "Video has not opend yet!!" << endl;
+		return;
+	}
 	SaveFileDialog* openFileDialog = new SaveFileDialog();
 	if (openFileDialog->ShowDialog()) {
 		Filename = openFileDialog->FileName;
@@ -295,6 +339,65 @@ void save(int id)
 }
 
 
+void a(int id) {
+	if (!cap.isOpened()) {
+		cout << "Video has not opened yet!" << endl;
+		return;
+	}
+	else {
+		bb = -1;
+		isButtonPushB = -1;
+		isPlay = -1;
+	}
+}
+
+void b(int id) {
+	if (!cap.isOpened()) {
+		cout << "Video has not opened yet!" << endl;
+		return;
+	}
+	else {
+		isButtonPushB = 1;
+		isPlay = -1;
+		bb = 0;
+	}
+}
+
+void c(int id) {
+	if (!cap.isOpened()) {
+		cout << "Video has not opened yet!" << endl;
+		return;
+	}
+	else {
+		isPlay = -1;
+		bb = 0;
+		isButtonPushB = -1;
+	}
+}
+void d(int id) {
+	if (!cap.isOpened()) {
+		cout << "Video has not opened yet!" << endl;
+		return;
+	}
+	else {
+		isPlay = 1;
+		bb = 0;
+		isButtonPushB = -1;
+	}
+}
+void e(int id) {
+	if (!cap.isOpened()) {
+		cout << "Video has not opened yet!" << endl;
+		return;
+	}
+	else {
+		isPlay = 1;
+		bb = 1;
+		isButtonPushB = -1;
+	}
+}
+
+
 int main(int argc, char* argv[]) {
 
 	glutInit(&argc, argv);
@@ -303,6 +406,24 @@ int main(int argc, char* argv[]) {
 	main_window = glui->get_glut_window_id();
 
 	
+	// control panel
+	GLUI_Panel* profPanel = glui->add_panel("Prof panel", GLUI_PANEL_EMBOSSED);
+	GLUI_Button* button_profbackS = glui->add_button_to_panel(profPanel, "<<", -1, a);
+	button_profbackS->set_w(30);
+	GLUI_Button* button_profback = glui->add_button_to_panel(profPanel, "<", 5, b);
+	button_profback->set_w(30);
+	GLUI_Button* button_profpause = glui->add_button_to_panel(profPanel, "||", -1, c);
+	button_profpause->set_w(30);
+	GLUI_Button* button_profforward = glui->add_button_to_panel(profPanel, ">", 5, d);
+	button_profforward->set_w(30);
+	GLUI_Button* button_profforwardS = button_profforwardS = glui->add_button_to_panel(profPanel, ">>", -1, e);
+	button_profforwardS->set_w(30);
+
+	glui->add_column(TRUE);
+
+
+
+
 	GLUI_Panel* videoPanel = glui->add_panel("Video panel", GLUI_PANEL_RAISED);
 	GLUI_Rollout* buttonRollout = glui->add_rollout_to_panel(videoPanel, "CLICK HERE", FALSE);
 	glui->add_button_to_panel(buttonRollout, "Open Video", -1, open);
@@ -316,7 +437,7 @@ int main(int argc, char* argv[]) {
 	glui->add_button_to_panel(videoPanel, "Use Camera", 0, open);
 	glui->add_button_to_panel(videoPanel, "Use Smartphone", 1, open);
 
-	int buttonSize = 60;
+	int buttonSize = 80;
 	// control panel
 	GLUI_Panel* controlPanel = glui->add_panel("Control panel", GLUI_PANEL_NONE);
 	glui->add_statictext_to_panel(controlPanel, "backward fast play");
