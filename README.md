@@ -33,7 +33,9 @@ a,b,c,d,e : 과제용 코드
 - 준비사항
 스마트 폰에서 DroidCam 어플리케이션을 설치한다.
 컴퓨터에는 DroidCam Client를 설치한다.
-![](https://play-lh.googleusercontent.com/kAhNquV2zT_o_gbrIH2zL9SlcpnFBoIPc3kCArateSR-9khqSp36gE0dPJFJK5Vetno)
+|<b>DroidCam</b>|
+|:---:|
+|![](https://play-lh.googleusercontent.com/kAhNquV2zT_o_gbrIH2zL9SlcpnFBoIPc3kCArateSR-9khqSp36gE0dPJFJK5Vetno)|
 
 - 연결방법
 무선 연결 시, 컴퓨터와 디바이스 모두 동일한 와이파이에 연결되어 있어야 하며, 아래의 이미지에서 Devie IP에 휴대폰에 적힌 Wifi IP 주소를 입력한다.
