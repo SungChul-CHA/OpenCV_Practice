@@ -42,6 +42,7 @@ a,b,c,d,e : 과제용 코드
 
 - 연결방법
 무선 연결 시, 컴퓨터와 디바이스 모두 동일한 와이파이에 연결되어 있어야 하며, 아래의 이미지에서 Devie IP에 휴대폰에 적힌 Wifi IP 주소를 입력한다.
+
 |<b>DroidCam Client</b> |
 | :--: |
 | ![](https://help.remotemeeting.com/hc/article_attachments/360094635153/mceclip0.png) |
