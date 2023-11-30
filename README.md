@@ -37,6 +37,13 @@ a,b,c,d,e : 과제용 코드
 |:---:|
 |![](https://play-lh.googleusercontent.com/kAhNquV2zT_o_gbrIH2zL9SlcpnFBoIPc3kCArateSR-9khqSp36gE0dPJFJK5Vetno)|
 
+
+|<b>`pairplot(hue = 'species')`</b> |
+| :--: |
+| ![](https://velog.velcdn.com/images/tony0613/post/1964aa9c-4a95-4312-8615-0da508929958/image.png) |
+
+
+
 - 연결방법
 무선 연결 시, 컴퓨터와 디바이스 모두 동일한 와이파이에 연결되어 있어야 하며, 아래의 이미지에서 Devie IP에 휴대폰에 적힌 Wifi IP 주소를 입력한다.
 ![](https://help.remotemeeting.com/hc/article_attachments/360094635153/mceclip0.png)
