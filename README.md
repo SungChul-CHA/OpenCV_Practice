@@ -1,4 +1,4 @@
-#OpenCV, GLUI
+# OpenCV, GLUI
 
 1. 모든 메뉴는 GLUI를 사용하여 구현.
 
@@ -27,3 +27,4 @@
 a,b,c,d,e : 과제용 코드
 
 ---
+
