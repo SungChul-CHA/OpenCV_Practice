@@ -8,6 +8,9 @@ using namespace std;
 
 #define BINARY_ID 100
 #define FILTER_ID 200
+#define LUT_ID 300
+#define WARPING_ID 400
+#define EXTRACT_ID 500
 
 
 int main_window;
@@ -204,6 +207,9 @@ void initCheckbox(int exception) {
 }
 
 
+
+
+
 // function 1 binary
 GLUI* binary_window;
 int binary_radio = 0;
@@ -226,7 +232,6 @@ GLUI_Spinner* blurSpinner;
 GLUI_Spinner* medianBlurSpinner;
 GLUI_Spinner* gaussianBlurSpinner;
 GLUI_Spinner* butterWorthBlurSpinner;
-
 int filter_radio = 0;
 int blurSize = 10;
 int medianBlurSize = 5;
@@ -311,22 +316,194 @@ void spinnerCallback(int id) {
 }
 
 
-// function 3 histEqual
+// function 4 histEqual
+GLUI* lut_window;
+int lut_radio = 0;
+
+void lutTypeCallback(int id) {
+	switch (lut_radio)
+	{
+	case 0: {
+		applyColorMap(src, result, COLORMAP_SPRING);
+		break;
+	}
+	case 1: {
+		applyColorMap(src, result, COLORMAP_SUMMER);
+		break;
+	}
+	case 2: {
+		applyColorMap(src, result, COLORMAP_AUTUMN);
+		break;
+	}
+	case 3: {
+		applyColorMap(src, result, COLORMAP_WINTER);
+		break;
+	}
+	case 4: {
+		applyColorMap(src, result, COLORMAP_RAINBOW);
+		break;
+	}
+	case 5: {
+		applyColorMap(src, result, COLORMAP_HSV);
+		break;
+	}
+	case 6: {
+		Mat tony(1, 256, CV_8UC3, Scalar::all(0));
+		Vec3b* p = (Vec3b*)tony.ptr();
+
+		for (int i = 0; i < 256; i++) {
+			p[i][0] = (i / 3); p[i][1] = (255 - i) - rand() % 20; p[i][2] = i;
+		}
+		LUT(src, tony, result);
+		break;
+	}
+	default:
+		errorMsg("ERROR LUT Unknown");
+		break;
+	}
+	imshow("src", result);
+}
 
 
+// function 5 warping
+GLUI* warping_window;
+GLUI_Spinner* warpingSpinner;
+int warping_radio = 0;
+float warping_offset = 15.0;
+
+void warpingAxis(int id) {
+	if (warping_radio == 0) {
+		int cols = src.cols;
+		result = src.clone();
+		for (int y = 0; y < src.rows; y++)
+			for (int x = 0; x < cols; x++)
+				for (int c = 0; c < 3; c++) {
+					int offset = (int)(warping_offset * sin(2 * 3.14 * x / 90));
+					if (y + offset >= 0){
+						result.at<Vec3b>(y, x)[c] = src.at<Vec3b>((y + offset) % src.rows, (x))[c];
+					}
+					else
+						result.at<Vec3b>(y, x)[c] = 0;
+				}
+	}
+	else {
+		int cols = src.cols;
+		result = src.clone();
+		for (int y = 0; y < src.rows; y++)
+			for (int x = 0; x < cols; x++)
+				for (int c = 0; c < 3; c++) {
+					int offset = (int)(-warping_offset * sin(2 * 3.14 * y / 180));
+					if (x + offset >= 0) {
+						result.at<Vec3b>(y, x)[c] = src.at<Vec3b>((y), (x + offset) % src.cols)[c];
+					}
+					else
+						result.at<Vec3b>(y, x)[c] = 0;
+				}
+	}
+	imshow("src", result);
+}
+
+void warpingOffsetSpinner(int id) {
+	if (warping_radio == 0) {
+		int cols = src.cols;
+		result = src.clone();
+		for (int y = 0; y < src.rows; y++)
+			for (int x = 0; x < cols; x++)
+				for (int c = 0; c < 3; c++) {
+					int offset = (int)(warping_offset * sin(2 * 3.14 * x / 90));
+					if (y + offset >= 0)
+						result.at<Vec3b>(y, x)[c] = src.at<Vec3b>((y + offset) % src.rows, (x))[c];
+					else
+						result.at<Vec3b>(y, x)[c] = 0;
+				}
+	}
+	else {
+		int cols = src.cols;
+		result = src.clone();
+		for (int y = 0; y < src.rows; y++)
+			for (int x = 0; x < cols; x++)
+				for (int c = 0; c < 3; c++) {
+					int offset = (int)(-warping_offset * sin(2 * 3.14 * y / 180));
+					if (x + offset >= 0)
+						result.at<Vec3b>(y, x)[c] = src.at<Vec3b>((y), (x + offset) % src.cols)[c];
+					else
+						result.at<Vec3b>(y, x)[c] = 0;
+				}
+	}
+	imshow("src", result);
+}
 
 
+//////////////////////////////////////////////////////////////버그 찾기
+// function 6 extract
+GLUI* extract_window;
+GLUI_Spinner* extractSpinner;
+int extract_radio = 0;
+int haugh_mim = 40;
 
 
+void haughShape(int id) {
+	if (extract_radio == 0) {
+		Mat dst;
+		Canny(gray, dst, 100, 200);
+		cvtColor(dst, result, COLOR_GRAY2BGR);
+		vector<Vec4i> lines;  // 검출된 직선의 양끝점 좌표를 저장하기 위한 버퍼
+		HoughLinesP(dst, lines, 1, CV_PI / 180, 50, haugh_mim, 20);
+		for (size_t i = 0; i < lines.size(); i++) {
+			Vec4i l = lines[i];
+			line(result, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0, 0, 255), 3, LINE_AA);
+		}
+		imshow("src", result);
+	}
+	else {
+		GaussianBlur(gray, gray, Size(9, 9), 2, 2);
+		vector<Vec3f> circles;
+		HoughCircles(gray, circles, HOUGH_GRADIENT, 1, gray.rows / 8, 200, 50, haugh_mim);
+		// 원을 영상 위에 그린다. 
+		for (size_t i = 0; i < circles.size(); i++) {
+			Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
+			int radius = cvRound(circles[i][2]);
+			circle(result, center, 3, Scalar(0, 255, 0), -1, 8, 0); // 원의 중심을 그린다. 
+			circle(result, center, radius, Scalar(0, 0, 255), 3, 8, 0); // 원을 그린다.
+		}
+		imshow("src", result);
+	}
+}
 
-
+void haughSensitivity(int id) {
+	if (extract_radio == 0) {
+		Mat dst;
+		Canny(gray, dst, 100, 200);
+		cvtColor(dst, result, COLOR_GRAY2BGR);
+		vector<Vec4i> lines;  // 검출된 직선의 양끝점 좌표를 저장하기 위한 버퍼
+		HoughLinesP(dst, lines, 1, CV_PI / 180, 50, haugh_mim, 20);
+		for (size_t i = 0; i < lines.size(); i++) {
+			Vec4i l = lines[i];
+			line(result, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0, 0, 255), 3, LINE_AA);
+		}
+		imshow("src", result);
+	}
+	else {
+		GaussianBlur(gray, gray, Size(9, 9), 2, 2);
+		vector<Vec3f> circles;
+		HoughCircles(gray, circles, HOUGH_GRADIENT, 1, gray.rows / 8, 200, 50, haugh_mim);
+		// 원을 영상 위에 그린다. 
+		for (size_t i = 0; i < circles.size(); i++) {
+			Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
+			int radius = cvRound(circles[i][2]);
+			circle(result, center, 3, Scalar(0, 255, 0), -1, 8, 0); // 원의 중심을 그린다. 
+			circle(result, center, radius, Scalar(0, 0, 255), 3, 8, 0); // 원을 그린다.
+		}
+		imshow("src", result);
+	}
+}
 
 
 
 void closeCallback(int id) {
 	switch (id)
 	{
-	case BINARY_ID: 
+	case BINARY_ID:
 		binary_window->close();
 		binary->enable();
 		isClick[0] = 0;
@@ -344,10 +521,29 @@ void closeCallback(int id) {
 		if (getWindowProperty("src", WND_PROP_VISIBLE) < 1) return;
 		else destroyWindow("src");
 		break;
+	case LUT_ID:
+		lut_window->close();
+		lut->enable();
+		isClick[3] = 0;
+		lutCheck = 0;
+		lut->set_int_val(0);
+		if (getWindowProperty("src", WND_PROP_VISIBLE) < 1) return;
+		else destroyWindow("src");
+		break;
+	case WARPING_ID:
+		warping_window->close();
+		warping->enable();
+		isClick[4] = 0;
+		warpingCheck = 0;
+		warping->set_int_val(0);
+		if (getWindowProperty("src", WND_PROP_VISIBLE) < 1) return;
+		else destroyWindow("src");
+		break;
 	default:
 		break;
-	} 
+	}
 }
+
 
 void checkCallback(int id) {
 	initCheckbox(id);
@@ -405,11 +601,65 @@ void checkCallback(int id) {
 	}
 	case 3: {
 		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
+		imshow("src", src);
 		Mat RGB[3], RGBO[3];
 		split(src, RGB);
 		for(int i = 0; i < 3; i++) equalizeHist(RGB[i], RGBO[i]);
 		merge(RGBO, 3, result);
 		imshow("src", result);
+		break;
+	}
+	case 4: {
+		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
+		imshow("src", src);
+		lut->disable();
+		lut_window = GLUI_Master.create_glui("LUT", LUT_ID, 700, 200);
+		GLUI_Panel* lutRadioGroupPanel = lut_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		GLUI_RadioGroup* lutRadioGroup = lut_window->add_radiogroup_to_panel(lutRadioGroupPanel, &lut_radio, -1, lutTypeCallback);
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Spring");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Summer");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Autumn");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Winter");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Rainbow");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "HSV");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Tony");
+
+		lut_window->add_button("Close", LUT_ID, closeCallback);
+		break;
+	}
+	case 5: {
+		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
+		imshow("src", src);
+		warping->disable();
+		warping_window = GLUI_Master.create_glui("Warping", WARPING_ID, 900, 200);
+		GLUI_Panel* warpingRadioGroupPanel = warping_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		GLUI_RadioGroup* warpingRadioGroup = warping_window->add_radiogroup_to_panel(warpingRadioGroupPanel, &warping_radio, -1, warpingAxis);
+		warping_window->add_radiobutton_to_group(warpingRadioGroup, "X");
+		warping_window->add_radiobutton_to_group(warpingRadioGroup, "Y");
+
+		warping_window->add_button("Close", WARPING_ID, closeCallback);
+
+		warping_window->add_column(FALSE);
+		warpingSpinner = warping_window->add_spinner("Warping Offset", GLUI_SPINNER_FLOAT, &warping_offset, 0, warpingOffsetSpinner);
+		warpingSpinner->set_speed(5);
+		warpingSpinner->set_float_limits(-30.0, 30.0, GLUI_LIMIT_CLAMP);
+		break;
+	}
+	case 6: {
+		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
+		cvtColor(src, gray, COLOR_BGR2GRAY);
+		imshow("src", src);
+		featureExtract->disable();
+		extract_window = GLUI_Master.create_glui("Haugh Trans", EXTRACT_ID, 900, 200);
+		GLUI_Panel* extractRadioGroupPanel = extract_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		GLUI_RadioGroup* extractRadioGroup = extract_window->add_radiogroup_to_panel(extractRadioGroupPanel, &extract_radio, -1, haughShape);
+		extract_window->add_radiobutton_to_group(extractRadioGroup, "Line");
+		extract_window->add_radiobutton_to_group(extractRadioGroup, "Circle");
+
+		extract_window->add_column(FALSE);
+		extractSpinner = warping_window->add_spinner("Warping Offset", GLUI_SPINNER_INT, &haugh_mim, 0, haughSensitivity);
+		extractSpinner->set_speed(0.5);
+		extractSpinner->set_int_limits(1, 40, GLUI_LIMIT_CLAMP);
 		break;
 	}
 	case 11: {
