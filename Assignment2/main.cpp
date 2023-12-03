@@ -6,22 +6,28 @@
 using namespace cv;
 using namespace std;
 
+
 #define BINARY_ID 100
 #define FILTER_ID 200
 #define LUT_ID 300
 #define WARPING_ID 400
 #define EXTRACT_ID 500
-
+#define HAUGH_ID 600
+#define DETECT_ID 700
+#define PHOTOSHOP_ID 800
+#define KNN_ID 900
 
 int main_window;
 String Filename;
 Mat src, result, gray;
+
 
 GLUI* glui;
 GLUI_Checkbox* binary; GLUI_Checkbox* filter; GLUI_Checkbox* histEqual;
 GLUI_Checkbox* lut; GLUI_Checkbox* warping; GLUI_Checkbox* featureExtract;
 GLUI_Checkbox* detectObj; GLUI_Checkbox* brush; GLUI_Checkbox* photoshop; 
 GLUI_Checkbox* numDetect;
+
 
 int binaryCheck, filterCheck, histCheck, lutCheck;
 int warpingCheck, featureExtCheck, detectingCheck;
@@ -57,7 +63,7 @@ void save(int id)
 	SaveFileDialog* openFileDialog = new SaveFileDialog();
 	if (openFileDialog->ShowDialog()) {
 		Filename = openFileDialog->FileName;
-		bool isSave = imwrite(Filename, src);
+		bool isSave = imwrite(Filename, result);
 		if (!isSave) { errorMsg("File Save"); return; }
 	}
 	else {
@@ -205,8 +211,6 @@ void initCheckbox(int exception) {
 		break;
 	}
 }
-
-
 
 
 
@@ -434,7 +438,7 @@ void warpingOffsetSpinner(int id) {
 }
 
 
-//////////////////////////////////////////////////////////////버그 찾기
+
 // function 6 extract
 GLUI* extract_window;
 GLUI_Spinner* extractSpinner;
@@ -448,7 +452,7 @@ void haughShape(int id) {
 		Canny(gray, dst, 100, 200);
 		cvtColor(dst, result, COLOR_GRAY2BGR);
 		vector<Vec4i> lines;  // 검출된 직선의 양끝점 좌표를 저장하기 위한 버퍼
-		HoughLinesP(dst, lines, 1, CV_PI / 180, 50, haugh_mim, 20);
+		HoughLinesP(dst, lines, 1, CV_PI / 180, 50, 100, 20);
 		for (size_t i = 0; i < lines.size(); i++) {
 			Vec4i l = lines[i];
 			line(result, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0, 0, 255), 3, LINE_AA);
@@ -458,7 +462,7 @@ void haughShape(int id) {
 	else {
 		GaussianBlur(gray, gray, Size(9, 9), 2, 2);
 		vector<Vec3f> circles;
-		HoughCircles(gray, circles, HOUGH_GRADIENT, 1, gray.rows / 8, 200, 50, haugh_mim);
+		HoughCircles(gray, circles, HOUGH_GRADIENT, 1, gray.rows / 8, 200, 50);
 		// 원을 영상 위에 그린다. 
 		for (size_t i = 0; i < circles.size(); i++) {
 			Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
@@ -476,17 +480,17 @@ void haughSensitivity(int id) {
 		Canny(gray, dst, 100, 200);
 		cvtColor(dst, result, COLOR_GRAY2BGR);
 		vector<Vec4i> lines;  // 검출된 직선의 양끝점 좌표를 저장하기 위한 버퍼
-		HoughLinesP(dst, lines, 1, CV_PI / 180, 50, haugh_mim, 20);
+		HoughLinesP(dst, lines, 1, CV_PI / 180, 50, 100, 20);
 		for (size_t i = 0; i < lines.size(); i++) {
 			Vec4i l = lines[i];
 			line(result, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0, 0, 255), 3, LINE_AA);
 		}
 		imshow("src", result);
 	}
-	else {
+	else if (extract_radio == 1) {
 		GaussianBlur(gray, gray, Size(9, 9), 2, 2);
 		vector<Vec3f> circles;
-		HoughCircles(gray, circles, HOUGH_GRADIENT, 1, gray.rows / 8, 200, 50, haugh_mim);
+		HoughCircles(gray, circles, HOUGH_GRADIENT, 1, gray.rows / 8, 200, 50);
 		// 원을 영상 위에 그린다. 
 		for (size_t i = 0; i < circles.size(); i++) {
 			Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
@@ -495,6 +499,169 @@ void haughSensitivity(int id) {
 			circle(result, center, radius, Scalar(0, 0, 255), 3, 8, 0); // 원을 그린다.
 		}
 		imshow("src", result);
+	}
+	else errorMsg("Haugh Transform");
+}
+
+
+// function 7 extract
+GLUI* dectect_window;
+int detect_radio = 0;
+
+void detectObject(int id) {
+	if (detect_radio == 0) {
+		Mat blur;
+		Size size = Size(5, 5);
+
+		GaussianBlur(gray, blur, size, 0);
+		threshold(blur, result, 0, 255, THRESH_BINARY | THRESH_OTSU);
+		imshow("src", result);
+	}
+	else {
+		Mat thimg, labels, centroids, stats;
+
+		threshold(gray, thimg, 128, 255, THRESH_BINARY | THRESH_OTSU);
+
+		//물체 갯수
+		int n = connectedComponentsWithStats(thimg, labels, stats, centroids);
+
+		vector<Vec3b> colors(n + 1);  // 컬러 버퍼
+		colors[0] = Vec3b(0, 0, 0);  // 배경은 검은색
+		for (int i = 1; i <= n; i++)  // 각 label에 랜덤컬러 생성
+			colors[i] = Vec3b(rand() % 256, rand() % 256, rand() % 256);
+		result = cv::Mat::zeros(gray.size(), CV_8UC3);
+		// label된 각 화소에 컬러값 설정
+		for (int y = 0; y < result.rows; y++)
+			for (int x = 0; x < result.cols; x++) {
+				int label = labels.at<int>(y, x);
+				result.at<cv::Vec3b>(y, x) = colors[label];
+			}
+		imshow("src", result);
+	}
+}
+
+
+// function 8 brush
+int red, green, blue, thickness;
+bool drawing = false;
+
+void drawCircle(int event, int x, int y, int, void* param) {
+	if (event == EVENT_LBUTTONDOWN)
+		drawing = true;
+	else if (event == EVENT_MOUSEMOVE) {
+		if (drawing == true)
+			circle(result, Point(x, y), thickness + 1, Scalar(blue, green, red), -1);
+	}
+	else if (event == EVENT_LBUTTONUP)
+		drawing = false;
+	imshow("src", result);
+}
+
+
+// function 9 photoshop
+GLUI* photoshop_window;
+Mat src_buf, roi1;
+
+bool isDrawing = false;
+int cx, cy, x2, y2, rx, ry = 0;
+
+void photoshopCB(int event, int x, int y, int, void* param) {
+	Mat& img = *(Mat*)param;
+	if (event == EVENT_LBUTTONDOWN) {
+		isDrawing = true;
+		cx = x;
+		cy = y;
+	}
+	else if (event == EVENT_MOUSEMOVE) {
+		if (isDrawing) {
+			img = src_buf.clone();
+			rx = cx;
+			ry = cy;
+			if (x < cx) rx = x;
+			if (y < cy) ry = y;
+			rectangle(img, Rect(rx, ry, abs(x - cx), abs(y - cy)), Scalar(0, 255, 0), 2);
+			cv::imshow("src", img);
+		}
+	}
+	else if (event == EVENT_LBUTTONUP) {
+		isDrawing = false;
+		x2 = x;
+		y2 = y;
+		rx = cx;
+		ry = cy;
+		if (x < cx) rx = x;
+		if (y < cy) ry = y;
+		rectangle(img, Rect(rx, ry, abs(x - cx), abs(y - cy)), Scalar(0, 255, 0), 2);
+		cv::imshow("src", img);
+	}
+}
+
+void click(int event, int x, int y, int, void* param) {
+	if (event == EVENT_LBUTTONDOWN) {
+		Mat& img = *(Mat*)(param);
+		img = src_buf.clone();
+
+		Mat roi2 = img(Rect(x - (abs(x2 - cx) / 2), y - abs(y2 - cy) / 2, abs(x2 - cx), abs(y2 - cy)));
+		roi2 = Scalar::all(0);
+		bitwise_or(roi2, roi1, roi2);
+		imshow("result", img);
+	}
+}
+
+void captureCB(int id) {
+	if (ry == 0) { errorMsg("Photoshop"); return; }
+	rx = cx;
+	ry = cy;
+	if (x2 < cx) rx = x2;
+	if (y2 < cy) ry = y2;
+
+	roi1 = src_buf(Rect(rx, ry, abs(x2 - cx), abs(y2 - cy)));
+
+	OpenFileDialog* openFileDialogp = new OpenFileDialog();
+	if (openFileDialogp->ShowDialog()) {
+		Filename = openFileDialogp->FileName;
+		result = imread(Filename);
+		if (result.empty()) errorMsg("Image Open");
+		else imshow("result", result);
+	}
+	else {
+		errorMsg("Open File Dialog");
+		return;
+	}
+	src_buf = result.clone();
+	setMouseCallback("result", click, &result);
+}
+
+
+// function 10 kNN
+GLUI* kNN_window;
+Ptr<ml::KNearest> knn = ml::KNearest::create();
+
+void drawDigit(int event, int x, int y, int, void* param) {
+	if (event == EVENT_LBUTTONDOWN)
+		drawing = true;
+	else if (event == EVENT_MOUSEMOVE) {
+		if (drawing == true)
+			circle(gray, Point(x, y), thickness + 1, Scalar::all(255), -1);
+	}
+	else if (event == EVENT_LBUTTONUP)
+		drawing = false;
+	imshow("Test", gray);
+}
+
+void testCB (int id) {
+	if (id == 0) {
+		Mat img_resize, img_float, img_flatten, res;
+		resize(gray, img_resize, Size(20, 20), 0, 0, INTER_AREA);
+		img_resize.convertTo(img_float, CV_32F);
+		img_flatten = img_float.reshape(1, 1);
+		knn->findNearest(img_flatten, 3, res);
+		float prediction = res.at<float>(0, 0);
+		cout << "Predicted Digit = " << prediction << '\n';
+	}
+	else {
+		gray = Mat::zeros(400, 400, CV_8U);
+		imshow("Test", gray);
 	}
 }
 
@@ -511,6 +678,7 @@ void closeCallback(int id) {
 		binary->set_int_val(0);
 		if (getWindowProperty("src", WND_PROP_VISIBLE) < 1) return;
 		else destroyWindow("src");
+		imshow("src", src);
 		break;
 	case FILTER_ID:
 		filter_window->close();
@@ -518,8 +686,7 @@ void closeCallback(int id) {
 		isClick[1] = 0;
 		filterCheck = 0;
 		filter->set_int_val(0);
-		if (getWindowProperty("src", WND_PROP_VISIBLE) < 1) return;
-		else destroyWindow("src");
+		imshow("src", src);
 		break;
 	case LUT_ID:
 		lut_window->close();
@@ -527,8 +694,7 @@ void closeCallback(int id) {
 		isClick[3] = 0;
 		lutCheck = 0;
 		lut->set_int_val(0);
-		if (getWindowProperty("src", WND_PROP_VISIBLE) < 1) return;
-		else destroyWindow("src");
+		imshow("src", src);
 		break;
 	case WARPING_ID:
 		warping_window->close();
@@ -536,13 +702,47 @@ void closeCallback(int id) {
 		isClick[4] = 0;
 		warpingCheck = 0;
 		warping->set_int_val(0);
-		if (getWindowProperty("src", WND_PROP_VISIBLE) < 1) return;
-		else destroyWindow("src");
+		imshow("src", src);
+		break;
+	case HAUGH_ID:
+		extract_window->close();
+		featureExtract->enable();
+		isClick[5] = 0;
+		featureExtCheck = 0;
+		featureExtract->set_int_val(0);
+		imshow("src", src);
+		break;
+	case DETECT_ID:
+		dectect_window->close();
+		detectObj->enable();
+		isClick[6] = 0;
+		detectingCheck = 0;
+		detectObj->set_int_val(0);
+		imshow("src", src);
+		break;
+	case PHOTOSHOP_ID:
+		photoshop_window->close();
+		destroyWindow("result");
+		photoshop->enable();
+		isClick[8] = 0;
+		photoshopCheck = 0;
+		photoshop->set_int_val(0);
+		imshow("src", src);
+		break;
+	case KNN_ID:
+		kNN_window->close();
+		destroyWindow("Test");
+		numDetect->enable();
+		isClick[9] = 0;
+		numDetectCheck = 0;
+		numDetect->set_int_val(0);
 		break;
 	default:
+		errorMsg("Close Button");
 		break;
 	}
 }
+
 
 
 void checkCallback(int id) {
@@ -574,7 +774,7 @@ void checkCallback(int id) {
 		cvtColor(src, gray, COLOR_BGR2GRAY);
 		imshow("src", gray);
 		filter->disable();
-		filter_window = GLUI_Master.create_glui("Binary", FILTER_ID, 700, 400);
+		filter_window = GLUI_Master.create_glui("Filter", FILTER_ID, 700, 400);
 		GLUI_Panel* filterRadioGroupPanel = filter_window->add_panel("", GLUI_PANEL_EMBOSSED);
 		GLUI_RadioGroup* filterRadioGroup = filter_window->add_radiogroup_to_panel(filterRadioGroupPanel, &filter_radio, -1, filterTypeCallback);
 		filter_window->add_radiobutton_to_group(filterRadioGroup, "Blur");
@@ -601,17 +801,16 @@ void checkCallback(int id) {
 	}
 	case 3: {
 		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
-		imshow("src", src);
 		Mat RGB[3], RGBO[3];
 		split(src, RGB);
 		for(int i = 0; i < 3; i++) equalizeHist(RGB[i], RGBO[i]);
 		merge(RGBO, 3, result);
-		imshow("src", result);
+		if (histEqual->get_int_val() == 1) imshow("src", result);
+		else imshow("src", src);
 		break;
 	}
 	case 4: {
 		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
-		imshow("src", src);
 		lut->disable();
 		lut_window = GLUI_Master.create_glui("LUT", LUT_ID, 700, 200);
 		GLUI_Panel* lutRadioGroupPanel = lut_window->add_panel("", GLUI_PANEL_EMBOSSED);
@@ -629,9 +828,8 @@ void checkCallback(int id) {
 	}
 	case 5: {
 		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
-		imshow("src", src);
 		warping->disable();
-		warping_window = GLUI_Master.create_glui("Warping", WARPING_ID, 900, 200);
+		warping_window = GLUI_Master.create_glui("Warping", WARPING_ID, 700, 200);
 		GLUI_Panel* warpingRadioGroupPanel = warping_window->add_panel("", GLUI_PANEL_EMBOSSED);
 		GLUI_RadioGroup* warpingRadioGroup = warping_window->add_radiogroup_to_panel(warpingRadioGroupPanel, &warping_radio, -1, warpingAxis);
 		warping_window->add_radiobutton_to_group(warpingRadioGroup, "X");
@@ -648,18 +846,103 @@ void checkCallback(int id) {
 	case 6: {
 		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
 		cvtColor(src, gray, COLOR_BGR2GRAY);
-		imshow("src", src);
+		result = src.clone();
 		featureExtract->disable();
-		extract_window = GLUI_Master.create_glui("Haugh Trans", EXTRACT_ID, 900, 200);
+		extract_window = GLUI_Master.create_glui("Haugh Trans", HAUGH_ID, 700, 400);
 		GLUI_Panel* extractRadioGroupPanel = extract_window->add_panel("", GLUI_PANEL_EMBOSSED);
 		GLUI_RadioGroup* extractRadioGroup = extract_window->add_radiogroup_to_panel(extractRadioGroupPanel, &extract_radio, -1, haughShape);
 		extract_window->add_radiobutton_to_group(extractRadioGroup, "Line");
 		extract_window->add_radiobutton_to_group(extractRadioGroup, "Circle");
 
+		extract_window->add_button("Close", HAUGH_ID, closeCallback);
+
 		extract_window->add_column(FALSE);
-		extractSpinner = warping_window->add_spinner("Warping Offset", GLUI_SPINNER_INT, &haugh_mim, 0, haughSensitivity);
+		extractSpinner = extract_window->add_spinner("Haugh min", GLUI_SPINNER_INT, &haugh_mim, 0, haughSensitivity);
 		extractSpinner->set_speed(0.5);
 		extractSpinner->set_int_limits(1, 40, GLUI_LIMIT_CLAMP);
+		break;
+	}
+	case 7: {
+		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
+		cvtColor(src, gray, COLOR_BGR2GRAY);
+		detectObj->disable();
+		dectect_window = GLUI_Master.create_glui("Detect Object", DETECT_ID, 700, 600);
+		GLUI_Panel* detectRadioGroupPanel = dectect_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		GLUI_RadioGroup* detectRadioGroup = dectect_window->add_radiogroup_to_panel(detectRadioGroupPanel, &detect_radio, -1, detectObject);
+		dectect_window->add_radiobutton_to_group(detectRadioGroup, "Otsu");
+		dectect_window->add_radiobutton_to_group(detectRadioGroup, "Labeling");
+
+		dectect_window->add_button("Close", DETECT_ID, closeCallback);
+		break;
+	}
+	case 8: {
+		if (src.empty()) src = Mat(400, 600, CV_8UC3, Scalar(0, 0, 0));
+		result = src.clone();
+		if (brush->get_int_val() == 1) imshow("src", result);
+		else {
+			destroyWindow("src");
+			imshow("src", src);
+			return;
+		}
+		
+		setMouseCallback("src", drawCircle);
+
+		createTrackbar("R", "src", &red, 255);
+		createTrackbar("G", "src", &green, 255);
+		createTrackbar("B", "src", &blue, 255);
+		createTrackbar("Thickness", "src", &thickness, 10);
+		break;
+	}
+	case 9: {
+		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
+		gray = src.clone();
+		photoshop->disable();
+		src_buf = gray.clone();
+		setMouseCallback("src", photoshopCB, &gray);
+
+		photoshop_window = GLUI_Master.create_glui("Photoshop", PHOTOSHOP_ID, 700, 200);
+		GLUI_Panel* photoshopPanel = photoshop_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		photoshop_window->add_button_to_panel(photoshopPanel, "Capture Source", 0, captureCB);
+
+		photoshop_window->add_button("Close", PHOTOSHOP_ID, closeCallback);
+
+		break;
+	}
+	case 10: {
+		src = imread("src/digits.png", IMREAD_GRAYSCALE);
+		numDetect->disable();
+
+		Mat train_features;  // 50,000개 데이터, 각 특징은 20x20
+		Mat labels;
+		// 각 숫자 영상을 행 벡터로 만들어서 train_feature에 저장한다. 
+		for (int r = 0; r < 50; r++) {  // 각 숫자별 5줄씩 10개(0~9) 
+			for (int c = 0; c < 100; c++) {  // 1줄에 100씩 
+				Mat roi, roi_float, roi_flatten;
+				roi = src(Rect(c * 20, r * 20, 20, 20));
+				roi.convertTo(roi_float, CV_32F);
+				roi_flatten = roi_float.reshape(1, 1);
+				train_features.push_back(roi_flatten);
+				labels.push_back(r / 5);
+			}
+		}
+
+		// 학습 과정
+		knn->train(train_features, ml::SampleTypes::ROW_SAMPLE, labels);
+
+		// 테스트 과정
+		gray = Mat::zeros(400, 400, CV_8U);
+
+		kNN_window = GLUI_Master.create_glui("Digit Training", KNN_ID, 700, 200);
+		GLUI_Panel* kNNPanel = kNN_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		kNN_window->add_button_to_panel(kNNPanel, "Test!", 0, testCB);
+		kNN_window->add_button_to_panel(kNNPanel, "Clear", 1, testCB);
+
+		kNN_window->add_button("Close", KNN_ID, closeCallback);
+
+		imshow("Test", gray);
+		setMouseCallback("Test", drawDigit);
+		createTrackbar("Thickness", "Test", &thickness, 10);
+
 		break;
 	}
 	case 11: {
@@ -705,12 +988,81 @@ void checkCallback(int id) {
 		createTrackbar("Maxval", "src", &thresh_maxvalue, 255, on_trackbar);
 		break;
 	}
+	case 12: {
+		if (src.empty()) { errorMsg("Open Image"); initCheckbox(id);  return; }
+		Mat RGB[3], RGBO[3];
+		split(src, RGB);
+		for (int i = 0; i < 3; i++) equalizeHist(RGB[i], RGBO[i]);
+		merge(RGBO, 3, result);
+		if (histEqual->get_int_val() == 1) imshow("src", result);
+		else imshow("src", src);
 
-	default:
+		lut->disable();
+		lut_window = GLUI_Master.create_glui("LUT", LUT_ID, 700, 200);
+		GLUI_Panel* lutRadioGroupPanel = lut_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		GLUI_RadioGroup* lutRadioGroup = lut_window->add_radiogroup_to_panel(lutRadioGroupPanel, &lut_radio, -1, lutTypeCallback);
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Spring");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Summer");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Autumn");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Winter");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Rainbow");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "HSV");
+		lut_window->add_radiobutton_to_group(lutRadioGroup, "Tony");
+
+		lut_window->add_button("Close", LUT_ID, closeCallback);
+
+		cvtColor(src, gray, COLOR_BGR2GRAY);
+		result = src.clone();
+		featureExtract->disable();
+		extract_window = GLUI_Master.create_glui("Haugh Trans", HAUGH_ID, 700, 400);
+		GLUI_Panel* extractRadioGroupPanel = extract_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		GLUI_RadioGroup* extractRadioGroup = extract_window->add_radiogroup_to_panel(extractRadioGroupPanel, &extract_radio, -1, haughShape);
+		extract_window->add_radiobutton_to_group(extractRadioGroup, "Line");
+		extract_window->add_radiobutton_to_group(extractRadioGroup, "Circle");
+
+		extract_window->add_button("Close", HAUGH_ID, closeCallback);
+
+		extract_window->add_column(FALSE);
+		extractSpinner = extract_window->add_spinner("Haugh min", GLUI_SPINNER_INT, &haugh_mim, 0, haughSensitivity);
+		extractSpinner->set_speed(0.5);
+		extractSpinner->set_int_limits(1, 40, GLUI_LIMIT_CLAMP);
+
+		detectObj->disable();
+		dectect_window = GLUI_Master.create_glui("Detect Object", DETECT_ID, 700, 550);
+		GLUI_Panel* detectRadioGroupPanel = dectect_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		GLUI_RadioGroup* detectRadioGroup = dectect_window->add_radiogroup_to_panel(detectRadioGroupPanel, &detect_radio, -1, detectObject);
+		dectect_window->add_radiobutton_to_group(detectRadioGroup, "Otsu");
+		dectect_window->add_radiobutton_to_group(detectRadioGroup, "Labeling");
+
+		dectect_window->add_button("Close", DETECT_ID, closeCallback);
+
+		warping->disable();
+		warping_window = GLUI_Master.create_glui("Warping", WARPING_ID, 850, 200);
+		GLUI_Panel* warpingRadioGroupPanel = warping_window->add_panel("", GLUI_PANEL_EMBOSSED);
+		GLUI_RadioGroup* warpingRadioGroup = warping_window->add_radiogroup_to_panel(warpingRadioGroupPanel, &warping_radio, -1, warpingAxis);
+		warping_window->add_radiobutton_to_group(warpingRadioGroup, "X");
+		warping_window->add_radiobutton_to_group(warpingRadioGroup, "Y");
+
+		warping_window->add_button("Close", WARPING_ID, closeCallback);
+
+		warping_window->add_column(FALSE);
+		warpingSpinner = warping_window->add_spinner("Warping Offset", GLUI_SPINNER_FLOAT, &warping_offset, 0, warpingOffsetSpinner);
+		warpingSpinner->set_speed(5);
+		warpingSpinner->set_float_limits(-30.0, 30.0, GLUI_LIMIT_CLAMP);
 		break;
 	}
-	
-	
+	default:
+		if (getWindowProperty("src", WND_PROP_VISIBLE) >= 1) { destroyWindow("src"); imshow("src", src); }		
+		if (getWindowProperty("Binary", WND_PROP_VISIBLE) >= 1) destroyWindow("Binary");
+		if (getWindowProperty("Filter", WND_PROP_VISIBLE) >= 1) destroyWindow("Filter");
+		if (getWindowProperty("LUT", WND_PROP_VISIBLE) >= 1) destroyWindow("LUT");
+		if (getWindowProperty("Warping", WND_PROP_VISIBLE) >= 1) destroyWindow("Warping");
+		if (getWindowProperty("Haugh Trans", WND_PROP_VISIBLE) >= 1) destroyWindow("Haugh Trans");
+		if (getWindowProperty("Detect Object", WND_PROP_VISIBLE) >= 1) destroyWindow("Detect Object");
+		if (getWindowProperty("Photoshop", WND_PROP_VISIBLE) >= 1) destroyWindow("Photoshop");
+		if (getWindowProperty("Digit Training", WND_PROP_VISIBLE) >= 1) destroyWindow("Digit Training");
+		break;
+	}
 }
 
 
@@ -780,6 +1132,7 @@ Mat getFilter(Size size, float D)
 	return filter;
 }
 
+
 void shuffleDFT(Mat& src)
 {
 	int cX = src.cols / 2;
@@ -796,30 +1149,4 @@ void shuffleDFT(Mat& src)
 	q2.copyTo(tmp);
 	q3.copyTo(q2);
 	tmp.copyTo(q3);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-bool drawing = false;
-int r = 1;
-void drawCircle(int event, int x, int y, int, void* param) {
-	if (event == EVENT_LBUTTONDOWN)
-		drawing = true;
-	else if (event == EVENT_MOUSEMOVE) {
-		if (drawing == true)
-			circle(src, Point(x, y), r, Scalar(0, 0, 255), -1);
-	}
-	else if (event == EVENT_LBUTTONUP)
-		drawing = false;
-	imshow("src", src);
 }
